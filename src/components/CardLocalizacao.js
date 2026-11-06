@@ -1,14 +1,13 @@
 import { useState } from 'react';
-import { StyleSheet, Text, View, Pressable } from 'react-native';
+import { StyleSheet, Text, View, Pressable, Linking } from 'react-native';
 import * as Location from 'expo-location';
-
-// Dica de aula:
-// GPS (expo-location) usa satélites e sensores locais (alta precisão).
-// Geolocalização por IP (ex: http://ip-api.com/json/ via fetch) é estimada pela rede.
+import { Ionicons, Feather } from '@expo/vector-icons';
 
 export default function CardLocalizacao() {
   const [latitude, setLatitude] = useState(null);
   const [longitude, setLongitude] = useState(null);
+  const [precisao, setPrecisao] = useState(null);
+  const [endereco, setEndereco] = useState(null);
   const [mensagem, setMensagem] = useState('');
   const [carregando, setCarregando] = useState(false);
 
@@ -17,7 +16,7 @@ export default function CardLocalizacao() {
       setCarregando(true);
       setMensagem('');
 
-      // solicita permissão para acessar a localização
+      // Solicita permissão para acessar a localização
       const { status } = await Location.requestForegroundPermissionsAsync();
 
       if (status !== 'granted') {
@@ -25,52 +24,174 @@ export default function CardLocalizacao() {
         return;
       }
 
-      // obtém a posição atual do celular
-      const localizacao = await Location.getCurrentPositionAsync({});
+      // Obtém a posição geográfica atual do celular via GPS
+      const localizacao = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
 
-      setLatitude(localizacao.coords.latitude);
-      setLongitude(localizacao.coords.longitude);
+      const lat = localizacao.coords.latitude;
+      const lon = localizacao.coords.longitude;
+
+      setLatitude(lat);
+      setLongitude(lon);
+      setPrecisao(
+        localizacao.coords.accuracy
+          ? Math.round(localizacao.coords.accuracy)
+          : null
+      );
+
+      // Geocodificação reversa
+      try {
+        const respostaEndereco = await Location.reverseGeocodeAsync({
+          latitude: lat,
+          longitude: lon,
+        });
+
+        if (respostaEndereco && respostaEndereco.length > 0) {
+          const dados = respostaEndereco[0];
+          setEndereco({
+            rua: dados.street || dados.name || 'Localização Atual',
+            numero: dados.streetNumber || '',
+            bairro: dados.district || dados.subregion || '',
+            cidade: dados.city || dados.subregion || '',
+            estado: dados.region || '',
+          });
+        }
+      } catch (errGeo) {
+        console.log('Erro na geocodificação reversa:', errGeo);
+      }
     } catch (error) {
       console.log(error);
-      setMensagem('Não foi possível obter sua localização.');
+      setMensagem('Não foi possível obter sua localização. Verifique o GPS.');
     } finally {
       setCarregando(false);
     }
   }
 
+  function abrirNoMapa() {
+    if (latitude && longitude) {
+      const url = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+      Linking.openURL(url);
+    }
+  }
+
   return (
     <View style={styles.card}>
+      {/* Cabeçalho do Card */}
       <View style={styles.cardHeader}>
-        <Text style={styles.cardTitulo}>📍 Minha Localização</Text>
+        <View style={styles.cardTituloWrapper}>
+          <View style={styles.iconBadgeAzul}>
+            <Ionicons name="location-outline" size={18} color="#2563EB" />
+          </View>
+          <Text style={styles.cardTitulo}>Minha Localização</Text>
+        </View>
+
+        <View style={styles.precisaoBadge}>
+          <View style={styles.precisaoDot} />
+          <Text style={styles.precisaoTexto}>
+            Precisão ± {precisao ? `${precisao}m` : '100m'}
+          </Text>
+        </View>
       </View>
 
-      <View style={styles.dadoBloco}>
-        <Text style={styles.dadoLabel}>Latitude</Text>
-        <Text style={styles.dadoValor}>
-          {latitude !== null ? latitude.toFixed(6) : '--'}
-        </Text>
+      {/* Caixa de Endereço Identificado */}
+      <View style={styles.enderecoContainer}>
+        <Text style={styles.enderecoLabel}>ENDEREÇO IDENTIFICADO</Text>
+        {endereco ? (
+          <>
+            <Text style={styles.enderecoRua} numberOfLines={1}>
+              {endereco.rua}
+              {endereco.numero ? `, ${endereco.numero}` : ''}
+            </Text>
+            <Text style={styles.enderecoSubtexto} numberOfLines={1}>
+              {[endereco.bairro, endereco.cidade, endereco.estado]
+                .filter(Boolean)
+                .join(' • ')}
+            </Text>
+          </>
+        ) : (
+          <>
+            <Text style={styles.enderecoPlaceholder}>
+              Localização ainda não capturada
+            </Text>
+            <Text style={styles.enderecoSubtexto}>
+              Toque no botão abaixo para buscar via GPS
+            </Text>
+          </>
+        )}
       </View>
 
-      <View style={styles.dadoBloco}>
-        <Text style={styles.dadoLabel}>Longitude</Text>
-        <Text style={styles.dadoValor}>
-          {longitude !== null ? longitude.toFixed(6) : '--'}
-        </Text>
+      {/* Linha com Latitude e Longitude */}
+      <View style={styles.coordenadasRow}>
+        <View style={styles.coordBox}>
+          <Text style={styles.coordLabel}>LATITUDE</Text>
+          <Text style={styles.coordValor}>
+            {latitude !== null ? latitude.toFixed(6) : '--'}
+          </Text>
+        </View>
+
+        <View style={styles.coordBox}>
+          <Text style={styles.coordLabel}>LONGITUDE</Text>
+          <Text style={styles.coordValor}>
+            {longitude !== null ? longitude.toFixed(6) : '--'}
+          </Text>
+        </View>
       </View>
 
       {mensagem ? <Text style={styles.mensagemAlerta}>{mensagem}</Text> : null}
 
+      {/* Botão Primário: Obter localização */}
       <Pressable
         style={({ pressed }) => [
-          styles.botao,
-          styles.botaoAzul,
+          styles.botaoEscuro,
           pressed && styles.botaoPressionado,
         ]}
         onPress={obterLocalizacao}
         disabled={carregando}
       >
-        <Text style={styles.textoBotao}>
-          {carregando ? 'Obtendo...' : 'Obter localização'}
+        {carregando ? (
+          <Ionicons
+            name="hourglass-outline"
+            size={17}
+            color="#FFFFFF"
+            style={styles.btnIcon}
+          />
+        ) : (
+          <Ionicons
+            name="time-outline"
+            size={17}
+            color="#FFFFFF"
+            style={styles.btnIcon}
+          />
+        )}
+        <Text style={styles.textoBotaoEscuro}>
+          {carregando ? 'Buscando GPS...' : 'Obter localização'}
+        </Text>
+      </Pressable>
+
+      {/* Botão Secundário: Ver no Google Maps */}
+      <Pressable
+        style={({ pressed }) => [
+          styles.botaoOutline,
+          !latitude && styles.botaoDesabilitado,
+          pressed && latitude && styles.botaoPressionado,
+        ]}
+        onPress={abrirNoMapa}
+        disabled={!latitude}
+      >
+        <Feather
+          name="map"
+          size={16}
+          color={latitude ? '#059669' : '#94A3B8'}
+          style={styles.btnIcon}
+        />
+        <Text
+          style={[
+            styles.textoBotaoOutline,
+            !latitude && styles.textoDesabilitado,
+          ]}
+        >
+          Ver no Google Maps
         </Text>
       </Pressable>
     </View>
@@ -80,41 +201,117 @@ export default function CardLocalizacao() {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 24,
     padding: 20,
-    marginBottom: 20,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 16,
     elevation: 2,
   },
   cardHeader: {
-    marginBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-    paddingBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 18,
+  },
+  cardTituloWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  iconBadgeAzul: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
   },
   cardTitulo: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1F2937',
-  },
-  dadoBloco: {
-    marginBottom: 12,
-  },
-  dadoLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#6B7280',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  dadoValor: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
-    color: '#1F2937',
-    marginTop: 2,
+    color: '#0F172A',
+  },
+  precisaoBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 20,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+  },
+  precisaoDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
+    marginRight: 6,
+  },
+  precisaoTexto: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  enderecoContainer: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    padding: 16,
+    marginBottom: 14,
+  },
+  enderecoLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#2563EB',
+    letterSpacing: 0.6,
+    marginBottom: 4,
+  },
+  enderecoRua: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  enderecoPlaceholder: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  enderecoSubtexto: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 3,
+    fontWeight: '500',
+  },
+  coordenadasRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  coordBox: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  coordLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  coordValor: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
   },
   mensagemAlerta: {
     fontSize: 13,
@@ -122,23 +319,46 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 12,
   },
-  botao: {
+  botaoEscuro: {
+    backgroundColor: '#0F172A',
+    borderRadius: 14,
     paddingVertical: 14,
-    borderRadius: 12,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 4,
   },
-  botaoAzul: {
-    backgroundColor: '#0284C7',
+  textoBotaoEscuro: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  botaoOutline: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 14,
+    paddingVertical: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+  textoBotaoOutline: {
+    color: '#0F172A',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  textoDesabilitado: {
+    color: '#94A3B8',
+  },
+  btnIcon: {
+    marginRight: 8,
+  },
+  botaoDesabilitado: {
+    opacity: 0.5,
   },
   botaoPressionado: {
     opacity: 0.85,
-    transform: [{ scale: 0.98 }],
-  },
-  textoBotao: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
+    transform: [{ scale: 0.985 }],
   },
 });

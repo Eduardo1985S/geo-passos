@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 export default function Rodape() {
   return (
     <View style={styles.rodape}>
-      <Text style={styles.rodapeTitulo}>Tecnologias utilizadas:</Text>
+      <Text style={styles.rodapeTitulo}>TECNOLOGIAS UTILIZADAS</Text>
       <Text style={styles.rodapeTexto}>
         Expo Location • Expo Sensors (Pedometer)
       </Text>
@@ -14,20 +14,20 @@ export default function Rodape() {
 const styles = StyleSheet.create({
   rodape: {
     alignItems: 'center',
-    marginTop: 8,
-    paddingVertical: 12,
+    marginTop: 12,
+    paddingVertical: 16,
   },
   rodapeTitulo: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#9CA3AF',
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 1.2,
+    marginBottom: 4,
   },
   rodapeTexto: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '500',
-    color: '#6B7280',
-    marginTop: 2,
+    color: '#64748B',
   },
 });
